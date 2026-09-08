@@ -2,6 +2,10 @@
 node_modules/
 agencia/data/*.jsonl
 
+# Java
+agencia-java/target/
+agencia-java/data/*.jsonl
+
 # Sistema
 Thumbs.db
 desktop.ini
