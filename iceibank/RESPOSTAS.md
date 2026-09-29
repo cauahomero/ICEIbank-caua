@@ -8,3 +8,8 @@
 2- não é revertido. Isso significa que o sistema fica inconsistente: o dinheiro "some" temporariamente, quebrando a atomicidade que uma transferência bancária deveria garantir.
 3-2PC: só debitar de fato após o destino confirmar que pode receber.
 Saga compensatória: se falhar o crédito remoto, credita de volta o valor na origem
+
+10.2
+- São concorrentes, não tem relação casual. Se A influenciou B então l(A) < l(B), então eles nunca podem ter relação casual
+
+10.3
