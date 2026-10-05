@@ -1,0 +1,12 @@
+# Broker de mensagens usado na transferência entre agências.
+# Painel de gerenciamento: http://localhost:15672 (usuário/senha: iceibank/iceibank)
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: iceibank-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: iceibank
+      RABBITMQ_DEFAULT_PASS: iceibank

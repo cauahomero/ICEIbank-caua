@@ -76,4 +76,6 @@ export const api = {
   historico: (agencia, id, limite = 20) => requisitar(agencia, 'GET', `/contas/${id}/historico?limite=${limite}`),
   transferir: (agencia, idOrigem, idDestino, valor) =>
     requisitar(agencia, 'POST', '/transferencias', { idOrigem, idDestino, valor }),
+  consultarTransferencia: (agencia, idTransferencia) =>
+    requisitar(agencia, 'GET', `/transferencias/${idTransferencia}`),
 }

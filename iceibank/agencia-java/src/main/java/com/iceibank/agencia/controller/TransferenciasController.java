@@ -1,26 +1,24 @@
 package com.iceibank.agencia.controller;
 
-import com.iceibank.agencia.auth.JwtFiltro;
-import com.iceibank.agencia.auth.JwtService;
 import com.iceibank.agencia.config.AgenciaState;
 import com.iceibank.agencia.config.AgenciasConfig;
-import com.iceibank.agencia.dto.CreditarRemotoRequest;
 import com.iceibank.agencia.dto.TransferenciaRequest;
-import com.iceibank.agencia.relogio.RelogioVetorial;
 import com.iceibank.agencia.log.RegistroEventos;
+import com.iceibank.agencia.mensageria.MensagemTransferencia;
+import com.iceibank.agencia.mensageria.PublicadorTransferencias;
+import com.iceibank.agencia.mensageria.Transferencia;
+import com.iceibank.agencia.mensageria.TransferenciasRegistro;
 import com.iceibank.agencia.model.Conta;
-import io.jsonwebtoken.Claims;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
+import com.iceibank.agencia.relogio.RelogioVetorial;
+import org.springframework.amqp.AmqpException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 public class TransferenciasController {
@@ -28,15 +26,19 @@ public class TransferenciasController {
     private final AgenciaState estado;
     private final RelogioVetorial relogio;
     private final RegistroEventos registro;
-    private final JwtService jwtService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final PublicadorTransferencias publicador;
+    private final TransferenciasRegistro transferencias;
+    private final boolean simularDuplicidade;
 
     public TransferenciasController(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro,
-                                    JwtService jwtService) {
+                                    PublicadorTransferencias publicador, TransferenciasRegistro transferencias,
+                                    @Value("${mensageria.simular-duplicidade}") boolean simularDuplicidade) {
         this.estado = estado;
         this.relogio = relogio;
         this.registro = registro;
-        this.jwtService = jwtService;
+        this.publicador = publicador;
+        this.transferencias = transferencias;
+        this.simularDuplicidade = simularDuplicidade;
     }
 
     @PostMapping("/transferencias")
@@ -46,6 +48,8 @@ public class TransferenciasController {
         if (contaOrigem.getSaldo() < req.getValor()) return erro(HttpStatus.BAD_REQUEST, "Saldo insuficiente.");
 
         int agenciaDestino = AgenciasConfig.agenciaResponsavel(req.getIdDestino());
+        boolean remota = agenciaDestino != estado.getIdAgencia();
+        String idTransferencia = UUID.randomUUID().toString();
 
         // O débito é sempre local, pois esta agência é a dona da conta de origem
         int[] tsDebito = relogio.eventoLocal();
@@ -54,9 +58,10 @@ public class TransferenciasController {
         detalhesDebito.put("idOrigem", req.getIdOrigem());
         detalhesDebito.put("idDestino", req.getIdDestino());
         detalhesDebito.put("valor", req.getValor());
+        if (remota) detalhesDebito.put("idTransferencia", idTransferencia);
         registro.registrar("TRANSFERENCIA_DEBITO", tsDebito, detalhesDebito);
 
-        if (agenciaDestino == estado.getIdAgencia()) {
+        if (!remota) {
             Conta contaDestino = estado.getContas().get(req.getIdDestino());
             if (contaDestino == null) {
                 contaOrigem.creditar(req.getValor());
@@ -72,61 +77,50 @@ public class TransferenciasController {
             return ResponseEntity.ok(Map.of("mensagem", "Transferência concluída (mesma agência)."));
         }
 
-        // Caso entre agências: chama a agência de destino diretamente via REST
+        // Entre agências: em vez de chamar a outra agência, publica na fila dela e não espera.
+        // A transferência é registrada antes de publicar, porque a confirmação pode chegar muito rápido.
+        Transferencia transferencia = new Transferencia(idTransferencia, req.getIdOrigem(), req.getIdDestino(),
+                agenciaDestino, req.getValor());
+        transferencias.adicionar(transferencia);
+
         int[] tsEnvio = relogio.aoEnviar();
-        String urlDestino = AgenciasConfig.urlAgencia(agenciaDestino);
-
+        MensagemTransferencia msg = MensagemTransferencia.solicitacao(idTransferencia, estado.getIdAgencia(),
+                agenciaDestino, req.getIdOrigem(), req.getIdDestino(), req.getValor(), tsEnvio);
         try {
-            CreditarRemotoRequest corpo = new CreditarRemotoRequest();
-            corpo.setValor(req.getValor());
-            corpo.setVetorEnvio(tsEnvio);
-            corpo.setOrigemAgencia(estado.getIdAgencia());
-
-            HttpHeaders cabecalhos = new HttpHeaders();
-            cabecalhos.setBearerAuth(jwtService.gerarTokenServico(estado.getIdAgencia()));
-
-            restTemplate.postForEntity(urlDestino + "/contas/" + req.getIdDestino() + "/creditar-remoto",
-                    new HttpEntity<>(corpo, cabecalhos), Void.class);
-            return ResponseEntity.ok(Map.of("mensagem", "Transferência concluída (entre agências)."));
-        } catch (RestClientException e) {
-            // LIMITAÇÃO CONHECIDA: se esta chamada falhar, o débito já aplicado acima
-            // NÃO é revertido 
-            Map<String, Object> detalhesFalha = new LinkedHashMap<>();
-            detalhesFalha.put("idOrigem", req.getIdOrigem());
-            detalhesFalha.put("idDestino", req.getIdDestino());
-            detalhesFalha.put("valor", req.getValor());
+            publicador.publicarCredito(agenciaDestino, msg);
+            if (simularDuplicidade) publicador.publicarCredito(agenciaDestino, msg);
+        } catch (AmqpException e) {
+            // Sem broker a mensagem nem saiu, então dá para desfazer o débito na hora
+            contaOrigem.creditar(req.getValor());
+            transferencia.finalizar(Transferencia.ESTORNADA, "Mensageria indisponível.");
+            Map<String, Object> detalhesFalha = new LinkedHashMap<>(detalhesDebito);
             detalhesFalha.put("erro", e.getMessage());
             registro.registrar("TRANSFERENCIA_FALHOU", relogio.eventoLocal(), detalhesFalha);
-
-            return erro(HttpStatus.BAD_GATEWAY,
-                    "Falha ao contatar agência de destino. Débito já aplicado - inconsistência conhecida (ver Sprint 4).");
-        }
-    }
-
-    @PostMapping("/contas/{id}/creditar-remoto")
-    public ResponseEntity<?> creditarRemoto(@PathVariable int id, @RequestBody CreditarRemotoRequest req,
-                                            HttpServletRequest request) {
-        Claims claims = (Claims) request.getAttribute(JwtFiltro.ATRIBUTO_CLAIMS);
-        if (!JwtService.TIPO_AGENCIA.equals(claims.get("tipo", String.class))) {
-            return erro(HttpStatus.FORBIDDEN, "Rota exclusiva para chamadas entre agências.");
+            return erro(HttpStatus.SERVICE_UNAVAILABLE, "Mensageria indisponível. A transferência não foi feita e o débito foi desfeito.");
         }
 
-        int[] ts = relogio.aoReceber(req.getVetorEnvio());
-
-        Conta conta = estado.getContas().get(id);
-        if (conta == null) return erro(HttpStatus.NOT_FOUND, "Conta não encontrada nesta agência.");
-
-        conta.creditar(req.getValor());
-        Map<String, Object> detalhes = new LinkedHashMap<>();
-        detalhes.put("idConta", id);
-        detalhes.put("valor", req.getValor());
-        detalhes.put("origemAgencia", req.getOrigemAgencia());
-        registro.registrar("TRANSFERENCIA_CREDITO_REMOTO", ts, detalhes);
+        Map<String, Object> detalhesEnvio = new LinkedHashMap<>();
+        detalhesEnvio.put("idOrigem", req.getIdOrigem());
+        detalhesEnvio.put("idDestino", req.getIdDestino());
+        detalhesEnvio.put("valor", req.getValor());
+        detalhesEnvio.put("idTransferencia", idTransferencia);
+        detalhesEnvio.put("idMensagem", msg.getIdMensagem());
+        detalhesEnvio.put("tipoMensagem", msg.getTipo());
+        detalhesEnvio.put("paraAgencia", agenciaDestino);
+        registro.registrar("MENSAGEM_ENVIADA", tsEnvio, detalhesEnvio);
 
         Map<String, Object> resposta = new LinkedHashMap<>();
-        resposta.put("mensagem", "Crédito remoto aplicado.");
-        resposta.put("saldoAtual", conta.getSaldo());
-        return ResponseEntity.ok(resposta);
+        resposta.put("mensagem", "Transferência enviada para a agência " + agenciaDestino + ". Aguardando confirmação.");
+        resposta.put("idTransferencia", idTransferencia);
+        resposta.put("status", transferencia.getStatus());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(resposta);
+    }
+
+    @GetMapping("/transferencias/{id}")
+    public ResponseEntity<?> consultar(@PathVariable String id) {
+        Transferencia t = transferencias.buscar(id);
+        if (t == null) return erro(HttpStatus.NOT_FOUND, "Transferência não encontrada nesta agência.");
+        return ResponseEntity.ok(t);
     }
 
     private ResponseEntity<Map<String, String>> erro(HttpStatus status, String mensagem) {

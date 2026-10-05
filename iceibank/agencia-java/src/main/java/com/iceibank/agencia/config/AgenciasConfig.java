@@ -9,10 +9,6 @@ public final class AgenciasConfig {
     private AgenciasConfig() {
     }
 
-    public static String urlAgencia(int idAgencia) {
-        return "http://localhost:" + (PORTA_BASE + idAgencia);
-    }
-
     public static int agenciaResponsavel(int idConta) {
         return idConta % NUMERO_AGENCIAS;
     }
