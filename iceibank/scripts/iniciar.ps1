@@ -1,15 +1,14 @@
 # Sobe o ambiente do ICEIBank: RabbitMQ (Docker), 3 agencias, monitor de alertas e frontend.
 # Cada processo abre na sua propria janela, para dar para ver os logs (e derrubar uma agencia).
+# Obs.: argumentos -Dalgo.com.ponto=valor vao entre aspas simples, senao o PowerShell os quebra no ponto.
 #
 # Exemplos:
 #   .\iniciar.cmd                     sobe tudo
-#   .\iniciar.cmd -Limpar             apaga os logs de eventos antes (bom para os experimentos)
 #   .\iniciar.cmd -Agencias 1         sobe so a agencia 1 (ex.: depois de derruba-la no teste de resiliencia)
 #   .\iniciar.cmd -CdbSegundos 20     CDB rende a cada 20s em vez de 5 min
 #   .\iniciar.cmd -Build              forca recompilar o jar
 param(
     [int[]]$Agencias = @(0, 1, 2),
-    [switch]$Limpar,
     [switch]$Build,
     [int]$CdbSegundos = 0,
     [switch]$SemFrontend,
@@ -80,17 +79,12 @@ if ($Build -or -not (Test-Path $jar) -or $fonteMaisNovo.LastWriteTime -gt (Get-I
     } finally { Pop-Location }
 }
 
-if ($Limpar) {
-    Passo "Apagando os logs de eventos (agencia-java\data)"
-    Remove-Item (Join-Path $pastaAgencia 'data\*.jsonl') -ErrorAction SilentlyContinue
-}
-
 # 4. Agencias
 Passo "Subindo as agencias $($Agencias -join ', ')"
 $argsCdb = if ($CdbSegundos -gt 0) { " --cdb.intervalo-ms=$($CdbSegundos * 1000)" } else { '' }
 foreach ($id in $Agencias) {
     NovaJanela "Agencia $id (porta $($PORTA_BASE + $id))" $pastaAgencia `
-        "`$env:AGENCIA_ID = '$id'; java -Dsun.stdout.encoding=UTF-8 -jar target\agencia-1.0.0.jar$argsCdb"
+        "`$env:AGENCIA_ID = '$id'; java '-Dsun.stdout.encoding=UTF-8' -jar target\agencia-1.0.0.jar$argsCdb"
 }
 
 # 5. Monitor de alertas (funcionalidade adicional) - so na subida completa
@@ -99,7 +93,7 @@ if (-not $SemMonitor -and -not $somenteAlgumas) {
         Where-Object { $_.CommandLine -like '*MonitorAlertas*' } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     NovaJanela "Monitor de alertas" $pastaAgencia `
-        "java -Dsun.stdout.encoding=UTF-8 -cp target\agencia-1.0.0.jar -Dloader.main=com.iceibank.agencia.MonitorAlertas org.springframework.boot.loader.launch.PropertiesLauncher"
+        "java '-Dsun.stdout.encoding=UTF-8' -cp target\agencia-1.0.0.jar '-Dloader.main=com.iceibank.agencia.MonitorAlertas' org.springframework.boot.loader.launch.PropertiesLauncher"
 }
 
 # 6. Frontend - so na subida completa e se ainda nao estiver rodando
