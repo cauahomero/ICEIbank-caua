@@ -8,6 +8,8 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 
+import javax.net.ssl.SSLContext;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -25,7 +27,15 @@ public class MonitorAlertas {
     public static void main(String[] args) throws Exception {
         String url = System.getenv().getOrDefault("RABBITMQ_URL", "amqp://iceibank:iceibank@localhost:5672");
         ConnectionFactory fabrica = new ConnectionFactory();
-        fabrica.setUri(url);
+        // setUri com amqps:// aceitaria qualquer certificado; então a URL entra como amqp://
+        // e o TLS é ligado à parte, validando o certificado do servidor (ex.: CloudAMQP)
+        boolean tls = url.startsWith("amqps://");
+        fabrica.setUri(tls ? "amqp://" + url.substring("amqps://".length()) : url);
+        if (tls) {
+            if (new URI(url).getPort() == -1) fabrica.setPort(ConnectionFactory.DEFAULT_AMQP_OVER_SSL_PORT);
+            fabrica.useSslProtocol(SSLContext.getDefault());
+            fabrica.enableHostnameVerification();
+        }
 
         Connection conexao = fabrica.newConnection("monitor-alertas");
         Channel canal = conexao.createChannel();
