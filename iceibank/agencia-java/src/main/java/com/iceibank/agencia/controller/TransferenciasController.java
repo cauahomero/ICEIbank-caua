@@ -6,7 +6,7 @@ import com.iceibank.agencia.config.AgenciaState;
 import com.iceibank.agencia.config.AgenciasConfig;
 import com.iceibank.agencia.dto.CreditarRemotoRequest;
 import com.iceibank.agencia.dto.TransferenciaRequest;
-import com.iceibank.agencia.lamport.RelogioLamport;
+import com.iceibank.agencia.relogio.RelogioVetorial;
 import com.iceibank.agencia.log.RegistroEventos;
 import com.iceibank.agencia.model.Conta;
 import io.jsonwebtoken.Claims;
@@ -26,12 +26,12 @@ import java.util.Map;
 public class TransferenciasController {
 
     private final AgenciaState estado;
-    private final RelogioLamport relogio;
+    private final RelogioVetorial relogio;
     private final RegistroEventos registro;
     private final JwtService jwtService;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public TransferenciasController(AgenciaState estado, RelogioLamport relogio, RegistroEventos registro,
+    public TransferenciasController(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro,
                                     JwtService jwtService) {
         this.estado = estado;
         this.relogio = relogio;
@@ -48,7 +48,7 @@ public class TransferenciasController {
         int agenciaDestino = AgenciasConfig.agenciaResponsavel(req.getIdDestino());
 
         // O débito é sempre local, pois esta agência é a dona da conta de origem
-        int tsDebito = relogio.eventoLocal();
+        int[] tsDebito = relogio.eventoLocal();
         contaOrigem.debitar(req.getValor());
         Map<String, Object> detalhesDebito = new LinkedHashMap<>();
         detalhesDebito.put("idOrigem", req.getIdOrigem());
@@ -62,7 +62,7 @@ public class TransferenciasController {
                 contaOrigem.creditar(req.getValor());
                 return erro(HttpStatus.NOT_FOUND, "Conta de destino não encontrada.");
             }
-            int tsCredito = relogio.eventoLocal();
+            int[] tsCredito = relogio.eventoLocal();
             contaDestino.creditar(req.getValor());
             Map<String, Object> detalhesCredito = new LinkedHashMap<>();
             detalhesCredito.put("idOrigem", req.getIdOrigem());
@@ -73,13 +73,13 @@ public class TransferenciasController {
         }
 
         // Caso entre agências: chama a agência de destino diretamente via REST
-        int tsEnvio = relogio.aoEnviar();
+        int[] tsEnvio = relogio.aoEnviar();
         String urlDestino = AgenciasConfig.urlAgencia(agenciaDestino);
 
         try {
             CreditarRemotoRequest corpo = new CreditarRemotoRequest();
             corpo.setValor(req.getValor());
-            corpo.setTimestampLamport(tsEnvio);
+            corpo.setVetorEnvio(tsEnvio);
             corpo.setOrigemAgencia(estado.getIdAgencia());
 
             HttpHeaders cabecalhos = new HttpHeaders();
@@ -111,7 +111,7 @@ public class TransferenciasController {
             return erro(HttpStatus.FORBIDDEN, "Rota exclusiva para chamadas entre agências.");
         }
 
-        int ts = relogio.aoReceber(req.getTimestampLamport());
+        int[] ts = relogio.aoReceber(req.getVetorEnvio());
 
         Conta conta = estado.getContas().get(id);
         if (conta == null) return erro(HttpStatus.NOT_FOUND, "Conta não encontrada nesta agência.");

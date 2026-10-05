@@ -4,7 +4,7 @@ import com.iceibank.agencia.config.AgenciaState;
 import com.iceibank.agencia.config.AgenciasConfig;
 import com.iceibank.agencia.dto.CriarContaRequest;
 import com.iceibank.agencia.dto.ValorRequest;
-import com.iceibank.agencia.lamport.RelogioLamport;
+import com.iceibank.agencia.relogio.RelogioVetorial;
 import com.iceibank.agencia.log.RegistroEventos;
 import com.iceibank.agencia.model.Conta;
 import org.springframework.http.HttpStatus;
@@ -18,10 +18,10 @@ import java.util.Map;
 public class ContasController {
 
     private final AgenciaState estado;
-    private final RelogioLamport relogio;
+    private final RelogioVetorial relogio;
     private final RegistroEventos registro;
 
-    public ContasController(AgenciaState estado, RelogioLamport relogio, RegistroEventos registro) {
+    public ContasController(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro) {
         this.estado = estado;
         this.relogio = relogio;
         this.registro = registro;
@@ -36,7 +36,7 @@ public class ContasController {
             return erro(HttpStatus.CONFLICT, "Conta já existe.");
         }
 
-        int ts = relogio.eventoLocal();
+        int[] ts = relogio.eventoLocal();
         Conta conta = new Conta(req.getId(), req.getNomeAluno(), req.getSaldoInicial());
         estado.getContas().put(req.getId(), conta);
 
@@ -61,7 +61,7 @@ public class ContasController {
         Conta conta = estado.getContas().get(id);
         if (conta == null) return erro(HttpStatus.NOT_FOUND, "Conta não encontrada nesta agência.");
 
-        int ts = relogio.eventoLocal();
+        int[] ts = relogio.eventoLocal();
         conta.creditar(req.getValor());
 
         Map<String, Object> detalhes = new LinkedHashMap<>();
@@ -79,7 +79,7 @@ public class ContasController {
         if (conta == null) return erro(HttpStatus.NOT_FOUND, "Conta não encontrada nesta agência.");
         if (conta.getSaldo() < req.getValor()) return erro(HttpStatus.BAD_REQUEST, "Saldo insuficiente.");
 
-        int ts = relogio.eventoLocal();
+        int[] ts = relogio.eventoLocal();
         conta.debitar(req.getValor());
 
         Map<String, Object> detalhes = new LinkedHashMap<>();

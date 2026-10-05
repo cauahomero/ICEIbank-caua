@@ -27,7 +27,7 @@ public class MesclarLogs {
                         .toList();
 
                 for (Path arquivo : arquivos) {
-                    List<String> linhas = Files.readAllLines(arquivo);
+                    List<String> linhas = Files.readAllLines(arquivo, java.nio.charset.StandardCharsets.UTF_8);
                     for (String linha : linhas) {
                         if (!linha.isBlank()) {
                             JsonNode evento = mapper.readTree(linha);
@@ -37,20 +37,20 @@ public class MesclarLogs {
                 }
             }
 
-            todosEventos.sort(Comparator.comparingLong(
-                e -> e.get("timestampLamport").asLong()
-            ));
+            // Eventos antigos (Sprint 1) não têm vetor
+            todosEventos.removeIf(e -> !e.has("timestampVetorial"));
+            todosEventos.sort(Comparator.comparing(e -> e.get("horaParede").asText()));
 
-            System.out.println("=== Linha do tempo unificada (ordenada por relogio de Lamport) ===");
+            System.out.println("=== Linha do tempo unificada (ordenada por hora de parede) ===");
             for (JsonNode evento : todosEventos) {
-                long lamport = evento.get("timestampLamport").asLong();
+                String vetor = evento.get("timestampVetorial").toString();
                 String horaParede = evento.get("horaParede").asText();
                 String agencia = evento.get("agencia").asText();
                 String tipo = evento.get("tipo").asText();
                 String detalhes = evento.get("detalhes").toString();
 
-                System.out.printf("[Lamport %d] (%s) %s - %s %s%n",
-                        lamport, horaParede, agencia, tipo, detalhes);
+                System.out.printf("[Vetor %s] (%s) %s - %s %s%n",
+                        vetor, horaParede, agencia, tipo, detalhes);
             }
 
         } catch (IOException e) {
