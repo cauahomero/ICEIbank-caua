@@ -7,6 +7,9 @@
 #   .\iniciar.cmd -Agencias 1         sobe so a agencia 1 (ex.: depois de derruba-la no teste de resiliencia)
 #   .\iniciar.cmd -CdbSegundos 20     CDB rende a cada 20s em vez de 5 min
 #   .\iniciar.cmd -Build              forca recompilar o jar
+#
+# Broker na nuvem (CloudAMQP): coloque a URL amqps://... na primeira linha de iceibank\rabbitmq.local
+# (arquivo ignorado pelo git) ou defina $env:RABBITMQ_URL. Sem nenhum dos dois, usa o RabbitMQ do Docker.
 param(
     [int[]]$Agencias = @(0, 1, 2),
     [switch]$Build,
@@ -43,9 +46,15 @@ function NovaJanela($titulo, $pasta, $comando) {
     Start-Process powershell -WorkingDirectory $pasta -ArgumentList '-NoExit', '-NoProfile', '-Command', $script | Out-Null
 }
 
-# 1. RabbitMQ: so sobe o Docker se nao houver RABBITMQ_URL apontando para outro lugar (ex.: CloudAMQP)
+# 1. Broker: sem RABBITMQ_URL no terminal, usa a URL do arquivo rabbitmq.local (fora do git).
+#    So sobe o Docker se a URL nao apontar para outro lugar (ex.: CloudAMQP).
+$arquivoUrl = Join-Path $raiz 'rabbitmq.local'
+if (-not $env:RABBITMQ_URL -and (Test-Path $arquivoUrl)) {
+    $env:RABBITMQ_URL = (Get-Content $arquivoUrl -TotalCount 1).Trim()
+}
 if ($env:RABBITMQ_URL -and $env:RABBITMQ_URL -notmatch 'localhost|127\.0\.0\.1') {
-    Passo "Usando o RabbitMQ de RABBITMQ_URL (nao vou subir o Docker)"
+    # Mostra so o host, sem usuario e senha
+    Passo "Usando o broker de RABBITMQ_URL: $(([Uri]$env:RABBITMQ_URL).Host) (nao vou subir o Docker)"
 } else {
     Passo "Subindo o RabbitMQ no Docker"
     $docker = Get-Command docker -ErrorAction SilentlyContinue

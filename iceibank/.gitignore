@@ -12,3 +12,6 @@ desktop.ini
 
 # Frontend
 frontend/dist/
+
+# URL do broker com usuario e senha (lida pelo iniciar.cmd)
+rabbitmq.local
