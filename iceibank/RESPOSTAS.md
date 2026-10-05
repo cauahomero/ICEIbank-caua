@@ -10,6 +10,9 @@
 Saga compensatória: se falhar o crédito remoto, credita de volta o valor na origem
 
 10.2
-- São concorrentes, não tem relação casual. Se A influenciou B então l(A) < l(B), então eles nunca podem ter relação casual
+- São concorrentes, não tem relação causal. Se A influenciou B então l(A) < l(B), então eles nunca podem ter relação casual
 
 10.3
+- A regra só vale em um sentido. Se A causou B, então L(A) < L(B). No outro sentido um relógio pode estar mais adiantado que o outro. Lamport mostra uma ordem possivel mas não mostra quem influenciou quem.
+
+- Não. No passo 3 apareceram dois eventos de agências diferentes com o mesmo timestamp, e eles eram concorrentes. Só que se L(A) < L(B), isso pode significar tanto que A causou B quanto que os dois são independentes e um relógio só estava mais "adiantado", e o Lamport não consegue diferenciar esses casos porque ele é um único contador que mistura a história de todas as agências. Isso motiva o relógio vetorial.
