@@ -5,11 +5,13 @@ import org.springframework.stereotype.Component;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,8 @@ public class RegistroEventos {
             "TRANSFERENCIA_DEBITO", "idOrigem",
             "TRANSFERENCIA_CREDITO", "idDestino",
             "TRANSFERENCIA_FALHOU", "idOrigem",
+            "TRANSFERENCIA_CONFIRMADA", "idOrigem",
+            "TRANSFERENCIA_ESTORNADA", "idOrigem",
             "TRANSFERENCIA_CREDITO_REMOTO", "idConta"
     );
 
@@ -38,22 +42,22 @@ public class RegistroEventos {
         this.caminhoArquivo = pastaDados.resolve("eventos-" + nomeAgencia + ".jsonl");
     }
 
-    public synchronized Map<String, Object> registrar(String tipo, int timestampLamport, Map<String, Object> detalhes) {
+    public synchronized Map<String, Object> registrar(String tipo, int[] timestampVetorial, Map<String, Object> detalhes) {
         Map<String, Object> evento = new LinkedHashMap<>();
         evento.put("agencia", nomeAgencia);
         evento.put("tipo", tipo);
-        evento.put("timestampLamport", timestampLamport);
+        evento.put("timestampVetorial", Arrays.stream(timestampVetorial).boxed().toList());
         evento.put("horaParede", Instant.now().toString());
         evento.put("detalhes", detalhes);
 
         String linha = paraJson(evento);
-        try (FileWriter writer = new FileWriter(caminhoArquivo.toFile(), true)) {
+        try (FileWriter writer = new FileWriter(caminhoArquivo.toFile(), StandardCharsets.UTF_8, true)) {
             writer.write(linha + System.lineSeparator());
         } catch (IOException e) {
             throw new RuntimeException("Falha ao gravar log de eventos", e);
         }
         eventosEmMemoria.add(evento);
-        System.out.println("[Lamport " + timestampLamport + "] " + tipo + " " + detalhes);
+        System.out.println("[Vetor " + Arrays.toString(timestampVetorial) + "] " + tipo + " " + detalhes);
         return evento;
     }
 
@@ -87,6 +91,14 @@ public class RegistroEventos {
             }
             sb.append("}");
             return sb.toString();
+        }
+        if (valor instanceof List<?> lista) {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < lista.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append(paraJson(lista.get(i)));
+            }
+            return sb.append("]").toString();
         }
         if (valor instanceof Number) {
             return valor.toString();

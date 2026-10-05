@@ -1,7 +1,7 @@
 package com.iceibank.agencia.cdb;
 
 import com.iceibank.agencia.config.AgenciaState;
-import com.iceibank.agencia.lamport.RelogioLamport;
+import com.iceibank.agencia.relogio.RelogioVetorial;
 import com.iceibank.agencia.log.RegistroEventos;
 import com.iceibank.agencia.model.Conta;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,11 +20,11 @@ import java.util.Map;
 public class RendimentoCdb {
 
     private final AgenciaState estado;
-    private final RelogioLamport relogio;
+    private final RelogioVetorial relogio;
     private final RegistroEventos registro;
     private final double taxa;
 
-    public RendimentoCdb(AgenciaState estado, RelogioLamport relogio, RegistroEventos registro,
+    public RendimentoCdb(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro,
                          @Value("${cdb.taxa}") double taxa) {
         this.estado = estado;
         this.relogio = relogio;
@@ -39,7 +39,7 @@ public class RendimentoCdb {
             double rendimento = Math.round(conta.getSaldo() * taxa * 100) / 100.0;
             if (rendimento <= 0) continue;
 
-            int ts = relogio.eventoLocal();
+            int[] ts = relogio.eventoLocal();
             conta.creditar(rendimento);
 
             Map<String, Object> detalhes = new LinkedHashMap<>();

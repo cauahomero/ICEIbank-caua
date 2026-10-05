@@ -2,7 +2,7 @@ package com.iceibank.agencia.dto;
 
 public class CreditarRemotoRequest {
     private double valor;
-    private int timestampLamport;
+    private int[] vetorEnvio;
     private int origemAgencia;
 
     public double getValor() {
@@ -13,12 +13,12 @@ public class CreditarRemotoRequest {
         this.valor = valor;
     }
 
-    public int getTimestampLamport() {
-        return timestampLamport;
+    public int[] getVetorEnvio() {
+        return vetorEnvio;
     }
 
-    public void setTimestampLamport(int timestampLamport) {
-        this.timestampLamport = timestampLamport;
+    public void setVetorEnvio(int[] vetorEnvio) {
+        this.vetorEnvio = vetorEnvio;
     }
 
     public int getOrigemAgencia() {

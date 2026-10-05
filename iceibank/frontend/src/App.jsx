@@ -347,7 +347,7 @@ function Historico({ agencia, onSessaoExpirada }) {
         <table>
           <thead>
             <tr>
-              <th>Lamport</th>
+              <th>Vetor</th>
               <th>Horário</th>
               <th>Evento</th>
               <th className="valor">Valor</th>
@@ -360,7 +360,7 @@ function Historico({ agencia, onSessaoExpirada }) {
               const classe = tipo.sinal > 0 ? 'entrada' : tipo.sinal < 0 ? 'saida' : ''
               return (
                 <tr key={i}>
-                  <td>{ev.timestampLamport}</td>
+                  <td>[{ev.timestampVetorial.join(', ')}]</td>
                   <td>{new Date(ev.horaParede).toLocaleTimeString('pt-BR')}</td>
                   <td>{tipo.descricao(ev.detalhes)}</td>
                   <td className={`valor ${classe}`}>
