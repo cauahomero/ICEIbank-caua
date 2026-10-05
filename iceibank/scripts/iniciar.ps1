@@ -28,9 +28,14 @@ $somenteAlgumas = $PSBoundParameters.ContainsKey('Agencias')
 
 function Passo($texto) { Write-Host "`n==> $texto" -ForegroundColor Cyan }
 
+# Testa IPv4 e IPv6: o Vite (Node) costuma escutar so em ::1, e o Java em todos os enderecos
 function PortaAberta($porta) {
-    $cliente = New-Object System.Net.Sockets.TcpClient
-    try { $cliente.Connect('localhost', $porta); return $true } catch { return $false } finally { $cliente.Close() }
+    foreach ($endereco in '127.0.0.1', '::1') {
+        $ip = [System.Net.IPAddress]::Parse($endereco)
+        $cliente = New-Object System.Net.Sockets.TcpClient($ip.AddressFamily)
+        try { $cliente.Connect($ip, $porta); return $true } catch { } finally { $cliente.Close() }
+    }
+    return $false
 }
 
 function EsperarPorta($porta, $segundos, $nome) {
