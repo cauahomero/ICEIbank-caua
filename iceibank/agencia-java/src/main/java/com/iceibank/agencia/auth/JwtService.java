@@ -15,9 +15,6 @@ import java.util.Date;
 public class JwtService {
 
     public static final String TIPO_USUARIO = "usuario";
-    public static final String TIPO_AGENCIA = "agencia";
-
-    private static final long EXPIRACAO_SERVICO_SEGUNDOS = 60;
 
     private final SecretKey chave;
     private final long expiracaoSegundos;
@@ -30,10 +27,6 @@ public class JwtService {
 
     public String gerarTokenUsuario(String usuario) {
         return gerar(usuario, TIPO_USUARIO, expiracaoSegundos);
-    }
-
-    public String gerarTokenServico(int idAgencia) {
-        return gerar("agencia-" + idAgencia, TIPO_AGENCIA, EXPIRACAO_SERVICO_SEGUNDOS);
     }
 
     public long getExpiracaoSegundos() {

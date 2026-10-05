@@ -118,6 +118,7 @@ function useOperacao(onSessaoExpirada) {
     try {
       const dados = await chamada()
       setResultado({ tipo: 'ok', texto: mensagemSucesso(dados), dados })
+      return dados
     } catch (err) {
       if (err instanceof ErroApi && err.status === 401) {
         onSessaoExpirada(`Sessão encerrada: ${err.message} Faça login novamente.`)
@@ -228,19 +229,63 @@ function DepositoSaque({ agencia, onSessaoExpirada }) {
   )
 }
 
+const TENTATIVAS_ACOMPANHAMENTO = 30
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 function Transferencia({ agencia, onSessaoExpirada }) {
   const [origem, setOrigem] = useState('')
   const [destino, setDestino] = useState('')
   const [valor, setValor] = useState('')
   const { resultado, carregando, executar } = useOperacao(onSessaoExpirada)
+  const [acompanhamento, setAcompanhamento] = useState(null)
 
-  function transferir(e) {
+  async function transferir(e) {
     e.preventDefault()
-    executar(
+    setAcompanhamento(null)
+    const r = await executar(
       () => api.transferir(agencia, Number(origem), Number(destino), Number(valor)),
       (r) => `${r.mensagem} ${moeda(valor)} da conta ${origem} para a conta ${destino}.`,
       dicaAgencia(origem, agencia),
     )
+    // Entre agências a API responde 202 (pendente): acompanha até a outra agência responder
+    if (r?.idTransferencia) acompanhar(r.idTransferencia)
+  }
+
+  async function acompanhar(idTransferencia) {
+    setAcompanhamento({ tipo: 'pendente', texto: 'Aguardando confirmação da agência de destino...' })
+    for (let tentativa = 0; tentativa < TENTATIVAS_ACOMPANHAMENTO; tentativa++) {
+      await esperar(1000)
+      let t
+      try {
+        t = await api.consultarTransferencia(agencia, idTransferencia)
+      } catch (err) {
+        if (err instanceof ErroApi && err.status === 401) {
+          onSessaoExpirada(`Sessão encerrada: ${err.message} Faça login novamente.`)
+        } else {
+          setAcompanhamento({ tipo: 'erro', texto: `Não foi possível acompanhar a transferência: ${err.message}` })
+        }
+        return
+      }
+      if (t.status === 'CONCLUIDA') {
+        setAcompanhamento({
+          tipo: 'ok',
+          texto: `Confirmada pela agência ${t.agenciaDestino}: a conta ${t.idDestino} recebeu ${moeda(t.valor)}.`,
+        })
+        return
+      }
+      if (t.status === 'ESTORNADA') {
+        setAcompanhamento({
+          tipo: 'erro',
+          texto: `Transferência recusada: ${t.motivo} O valor de ${moeda(t.valor)} voltou para a conta ${t.idOrigem}.`,
+        })
+        return
+      }
+    }
+    setAcompanhamento({
+      tipo: 'pendente',
+      texto:
+        'Ainda pendente: a agência de destino não respondeu. A mensagem continua na fila e será processada quando ela voltar. Consulte o histórico depois.',
+    })
   }
 
   return (
@@ -260,6 +305,7 @@ function Transferencia({ agencia, onSessaoExpirada }) {
       </label>
       <button disabled={carregando}>Transferir</button>
       <Mensagem resultado={resultado} />
+      <Mensagem resultado={acompanhamento} />
     </form>
   )
 }
@@ -313,7 +359,13 @@ const TIPOS_EVENTO = {
     descricao: (d) => `Transferência recebida da agência ${d.origemAgencia}`,
     sinal: 1,
   },
-  TRANSFERENCIA_FALHOU: { descricao: (d) => `Falha ao transferir para conta ${d.idDestino}`, sinal: 0 },
+  // Desde a mensageria, a falha ao publicar desfaz o débito na hora
+  TRANSFERENCIA_FALHOU: { descricao: (d) => `Falha ao transferir para conta ${d.idDestino} (valor devolvido)`, sinal: 1 },
+  TRANSFERENCIA_CONFIRMADA: {
+    descricao: (d) => `Transferência para conta ${d.idDestino} confirmada pelo destino`,
+    sinal: 0,
+  },
+  TRANSFERENCIA_ESTORNADA: { descricao: (d) => `Estorno: ${d.motivo}`, sinal: 1 },
 }
 
 function Historico({ agencia, onSessaoExpirada }) {
