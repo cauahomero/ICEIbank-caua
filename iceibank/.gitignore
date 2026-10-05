@@ -9,3 +9,6 @@ agencia-java/data/*.jsonl
 # Sistema
 Thumbs.db
 desktop.ini
+
+# Frontend
+frontend/dist/
