@@ -156,6 +156,7 @@ function Painel({ agencia, onSessaoExpirada }) {
       <DepositoSaque agencia={agencia} onSessaoExpirada={onSessaoExpirada} />
       <Transferencia agencia={agencia} onSessaoExpirada={onSessaoExpirada} />
       <CriarConta agencia={agencia} onSessaoExpirada={onSessaoExpirada} />
+      <Historico agencia={agencia} onSessaoExpirada={onSessaoExpirada} />
     </main>
   )
 }
@@ -297,6 +298,81 @@ function CriarConta({ agencia, onSessaoExpirada }) {
       </label>
       <button disabled={carregando}>Criar</button>
       <Mensagem resultado={resultado} />
+    </form>
+  )
+}
+
+const TIPOS_EVENTO = {
+  CRIAR_CONTA: { descricao: () => 'Abertura de conta', sinal: 1, campoValor: 'saldoInicial' },
+  DEPOSITO: { descricao: () => 'Depósito', sinal: 1 },
+  SAQUE: { descricao: () => 'Saque', sinal: -1 },
+  RENDIMENTO_CDB: { descricao: (d) => `Rendimento CDB (${d.taxa * 100}%)`, sinal: 1 },
+  TRANSFERENCIA_DEBITO: { descricao: (d) => `Transferência enviada para conta ${d.idDestino}`, sinal: -1 },
+  TRANSFERENCIA_CREDITO: { descricao: (d) => `Transferência recebida da conta ${d.idOrigem}`, sinal: 1 },
+  TRANSFERENCIA_CREDITO_REMOTO: {
+    descricao: (d) => `Transferência recebida da agência ${d.origemAgencia}`,
+    sinal: 1,
+  },
+  TRANSFERENCIA_FALHOU: { descricao: (d) => `Falha ao transferir para conta ${d.idDestino}`, sinal: 0 },
+}
+
+function Historico({ agencia, onSessaoExpirada }) {
+  const [id, setId] = useState('')
+  const { resultado, carregando, executar } = useOperacao(onSessaoExpirada)
+
+  function buscar(e) {
+    e.preventDefault()
+    executar(
+      () => api.historico(agencia, id),
+      (r) => `Conta ${r.conta.id} (${r.conta.nomeAluno}) — saldo atual: ${moeda(r.conta.saldo)}`,
+      dicaAgencia(id, agencia),
+    )
+  }
+
+  const eventos = resultado?.tipo === 'ok' ? resultado.dados.eventos : null
+
+  return (
+    <form className="cartao largo" onSubmit={buscar}>
+      <h2>Histórico da conta</h2>
+      <div className="linha">
+        <label>
+          Nº da conta
+          <input type="number" min="0" value={id} onChange={(e) => setId(e.target.value)} required />
+        </label>
+        <button disabled={carregando}>Ver histórico</button>
+      </div>
+      <Mensagem resultado={resultado} />
+      {eventos && eventos.length === 0 && <p className="ajuda">Nenhum evento registrado para esta conta.</p>}
+      {eventos && eventos.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Lamport</th>
+              <th>Horário</th>
+              <th>Evento</th>
+              <th className="valor">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {eventos.map((ev, i) => {
+              const tipo = TIPOS_EVENTO[ev.tipo] ?? { descricao: () => ev.tipo, sinal: 0 }
+              const valor = ev.detalhes[tipo.campoValor ?? 'valor']
+              const classe = tipo.sinal > 0 ? 'entrada' : tipo.sinal < 0 ? 'saida' : ''
+              return (
+                <tr key={i}>
+                  <td>{ev.timestampLamport}</td>
+                  <td>{new Date(ev.horaParede).toLocaleTimeString('pt-BR')}</td>
+                  <td>{tipo.descricao(ev.detalhes)}</td>
+                  <td className={`valor ${classe}`}>
+                    {tipo.sinal < 0 ? '- ' : tipo.sinal > 0 ? '+ ' : ''}
+                    {moeda(valor)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
     </form>
   )
 }

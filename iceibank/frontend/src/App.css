@@ -121,3 +121,39 @@ button:disabled {
   font-size: 0.85rem;
   color: #6b7280;
 }
+
+.largo {
+  grid-column: 1 / -1;
+}
+
+.linha {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.valor {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.entrada {
+  color: #166534;
+}
+
+.saida {
+  color: #991b1b;
+}

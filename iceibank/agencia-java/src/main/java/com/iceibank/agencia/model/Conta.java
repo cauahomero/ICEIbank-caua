@@ -22,15 +22,15 @@ public class Conta {
         return nomeAluno;
     }
 
-    public double getSaldo() {
+    public synchronized double getSaldo() {
         return saldo;
     }
 
-    public void creditar(double valor) {
+    public synchronized void creditar(double valor) {
         this.saldo += valor;
     }
 
-    public void debitar(double valor) {
+    public synchronized void debitar(double valor) {
         this.saldo -= valor;
     }
 }

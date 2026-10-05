@@ -73,6 +73,7 @@ export const api = {
     requisitar(agencia, 'POST', '/contas', { id, nomeAluno, saldoInicial }),
   depositar: (agencia, id, valor) => requisitar(agencia, 'POST', `/contas/${id}/depositar`, { valor }),
   sacar: (agencia, id, valor) => requisitar(agencia, 'POST', `/contas/${id}/sacar`, { valor }),
+  historico: (agencia, id, limite = 20) => requisitar(agencia, 'GET', `/contas/${id}/historico?limite=${limite}`),
   transferir: (agencia, idOrigem, idDestino, valor) =>
     requisitar(agencia, 'POST', '/transferencias', { idOrigem, idDestino, valor }),
 }

@@ -91,6 +91,18 @@ public class ContasController {
         return ResponseEntity.ok(conta);
     }
 
+    @GetMapping("/contas/{id}/historico")
+    public ResponseEntity<?> historico(@PathVariable int id, @RequestParam(defaultValue = "20") int limite) {
+        Conta conta = estado.getContas().get(id);
+        if (conta == null) return erro(HttpStatus.NOT_FOUND, "Conta não encontrada nesta agência.");
+        if (limite < 1) return erro(HttpStatus.BAD_REQUEST, "O limite deve ser maior que zero.");
+
+        Map<String, Object> resposta = new LinkedHashMap<>();
+        resposta.put("conta", conta);
+        resposta.put("eventos", registro.eventosDaConta(id, limite));
+        return ResponseEntity.ok(resposta);
+    }
+
     private ResponseEntity<Map<String, String>> erro(HttpStatus status, String mensagem) {
         return ResponseEntity.status(status).body(Map.of("erro", mensagem));
     }

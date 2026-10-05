@@ -9,13 +9,27 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
 public class RegistroEventos {
+    private static final Map<String, String> CAMPO_CONTA = Map.of(
+            "CRIAR_CONTA", "id",
+            "DEPOSITO", "id",
+            "SAQUE", "id",
+            "RENDIMENTO_CDB", "id",
+            "TRANSFERENCIA_DEBITO", "idOrigem",
+            "TRANSFERENCIA_CREDITO", "idDestino",
+            "TRANSFERENCIA_FALHOU", "idOrigem",
+            "TRANSFERENCIA_CREDITO_REMOTO", "idConta"
+    );
+
     private final String nomeAgencia;
     private final Path caminhoArquivo;
+    private final List<Map<String, Object>> eventosEmMemoria = new ArrayList<>();
 
     public RegistroEventos(@Value("${agencia.id}") String idAgencia) throws IOException {
         this.nomeAgencia = "agencia-" + idAgencia;
@@ -38,11 +52,24 @@ public class RegistroEventos {
         } catch (IOException e) {
             throw new RuntimeException("Falha ao gravar log de eventos", e);
         }
+        eventosEmMemoria.add(evento);
         System.out.println("[Lamport " + timestampLamport + "] " + tipo + " " + detalhes);
         return evento;
     }
 
-    // Serializador simples, só para os tipos usados neste projeto (String, Number, Map aninhado).
+    public synchronized List<Map<String, Object>> eventosDaConta(int idConta, int limite) {
+        List<Map<String, Object>> resultado = new ArrayList<>();
+        for (int i = eventosEmMemoria.size() - 1; i >= 0 && resultado.size() < limite; i--) {
+            Map<String, Object> evento = eventosEmMemoria.get(i);
+            String campo = CAMPO_CONTA.get((String) evento.get("tipo"));
+            Map<?, ?> detalhes = (Map<?, ?>) evento.get("detalhes");
+            if (campo != null && Integer.valueOf(idConta).equals(detalhes.get(campo))) {
+                resultado.add(evento);
+            }
+        }
+        return resultado;
+    }
+
     @SuppressWarnings("unchecked")
     private String paraJson(Object valor) {
         if (valor == null) {
