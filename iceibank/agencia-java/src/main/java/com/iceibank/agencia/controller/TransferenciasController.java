@@ -1,5 +1,7 @@
 package com.iceibank.agencia.controller;
 
+import com.iceibank.agencia.auth.JwtFiltro;
+import com.iceibank.agencia.auth.JwtService;
 import com.iceibank.agencia.config.AgenciaState;
 import com.iceibank.agencia.config.AgenciasConfig;
 import com.iceibank.agencia.dto.CreditarRemotoRequest;
@@ -7,6 +9,10 @@ import com.iceibank.agencia.dto.TransferenciaRequest;
 import com.iceibank.agencia.lamport.RelogioLamport;
 import com.iceibank.agencia.log.RegistroEventos;
 import com.iceibank.agencia.model.Conta;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,12 +28,15 @@ public class TransferenciasController {
     private final AgenciaState estado;
     private final RelogioLamport relogio;
     private final RegistroEventos registro;
+    private final JwtService jwtService;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public TransferenciasController(AgenciaState estado, RelogioLamport relogio, RegistroEventos registro) {
+    public TransferenciasController(AgenciaState estado, RelogioLamport relogio, RegistroEventos registro,
+                                    JwtService jwtService) {
         this.estado = estado;
         this.relogio = relogio;
         this.registro = registro;
+        this.jwtService = jwtService;
     }
 
     @PostMapping("/transferencias")
@@ -48,7 +57,6 @@ public class TransferenciasController {
         registro.registrar("TRANSFERENCIA_DEBITO", tsDebito, detalhesDebito);
 
         if (agenciaDestino == estado.getIdAgencia()) {
-            // Caso simples: mesma agência, credita direto
             Conta contaDestino = estado.getContas().get(req.getIdDestino());
             if (contaDestino == null) {
                 contaOrigem.creditar(req.getValor());
@@ -74,14 +82,15 @@ public class TransferenciasController {
             corpo.setTimestampLamport(tsEnvio);
             corpo.setOrigemAgencia(estado.getIdAgencia());
 
-            restTemplate.postForEntity(urlDestino + "/contas/" + req.getIdDestino() + "/creditar-remoto", corpo, Void.class);
+            HttpHeaders cabecalhos = new HttpHeaders();
+            cabecalhos.setBearerAuth(jwtService.gerarTokenServico(estado.getIdAgencia()));
+
+            restTemplate.postForEntity(urlDestino + "/contas/" + req.getIdDestino() + "/creditar-remoto",
+                    new HttpEntity<>(corpo, cabecalhos), Void.class);
             return ResponseEntity.ok(Map.of("mensagem", "Transferência concluída (entre agências)."));
         } catch (RestClientException e) {
             // LIMITAÇÃO CONHECIDA: se esta chamada falhar, o débito já aplicado acima
-            // NÃO é revertido - o dinheiro "desaparece" temporariamente. Resolver isso
-            // de forma correta (garantir atomicidade mesmo sob falha) é o assunto do
-            // Sprint 4, com uma transação distribuída de verdade (2PC/Saga). Por
-            // enquanto, só registramos a inconsistência no log.
+            // NÃO é revertido 
             Map<String, Object> detalhesFalha = new LinkedHashMap<>();
             detalhesFalha.put("idOrigem", req.getIdOrigem());
             detalhesFalha.put("idDestino", req.getIdDestino());
@@ -95,9 +104,13 @@ public class TransferenciasController {
     }
 
     @PostMapping("/contas/{id}/creditar-remoto")
-    public ResponseEntity<?> creditarRemoto(@PathVariable int id, @RequestBody CreditarRemotoRequest req) {
-        // Ao RECEBER uma mensagem de outra agência, o relógio de Lamport é
-        // atualizado com base no timestamp recebido - é a regra 3 do algoritmo.
+    public ResponseEntity<?> creditarRemoto(@PathVariable int id, @RequestBody CreditarRemotoRequest req,
+                                            HttpServletRequest request) {
+        Claims claims = (Claims) request.getAttribute(JwtFiltro.ATRIBUTO_CLAIMS);
+        if (!JwtService.TIPO_AGENCIA.equals(claims.get("tipo", String.class))) {
+            return erro(HttpStatus.FORBIDDEN, "Rota exclusiva para chamadas entre agências.");
+        }
+
         int ts = relogio.aoReceber(req.getTimestampLamport());
 
         Conta conta = estado.getContas().get(id);
