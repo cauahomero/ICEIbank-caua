@@ -27,6 +27,15 @@ public class MensageriaConfig {
 
     public static final String EXCHANGE = "iceibank.eventos";
 
+    // Funcionalidade adicional: alertas de saldo baixo num tópico separado, com uma fila
+    // própria que recebe os alertas de todas as agências (o "#" casa qualquer sufixo)
+    public static final String FILA_ALERTAS = "fila-alertas";
+    public static final String PADRAO_ALERTAS = "alerta.#";
+
+    public static String chaveAlertaSaldoBaixo(int idAgencia) {
+        return "alerta.saldo-baixo.agencia." + idAgencia;
+    }
+
     public static String fila(int idAgencia) {
         return "fila-agencia-" + idAgencia;
     }
@@ -52,6 +61,9 @@ public class MensageriaConfig {
             declaraveis.add(BindingBuilder.bind(fila).to(exchange).with(chaveCredito(i)));
             declaraveis.add(BindingBuilder.bind(fila).to(exchange).with(chaveResposta(i)));
         }
+        Queue filaAlertas = QueueBuilder.durable(FILA_ALERTAS).build();
+        declaraveis.add(filaAlertas);
+        declaraveis.add(BindingBuilder.bind(filaAlertas).to(exchange).with(PADRAO_ALERTAS));
         return new Declarables(declaraveis);
     }
 

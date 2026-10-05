@@ -1,5 +1,6 @@
 package com.iceibank.agencia.controller;
 
+import com.iceibank.agencia.alerta.AlertasSaldo;
 import com.iceibank.agencia.config.AgenciaState;
 import com.iceibank.agencia.config.AgenciasConfig;
 import com.iceibank.agencia.dto.CriarContaRequest;
@@ -20,11 +21,14 @@ public class ContasController {
     private final AgenciaState estado;
     private final RelogioVetorial relogio;
     private final RegistroEventos registro;
+    private final AlertasSaldo alertas;
 
-    public ContasController(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro) {
+    public ContasController(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro,
+                            AlertasSaldo alertas) {
         this.estado = estado;
         this.relogio = relogio;
         this.registro = registro;
+        this.alertas = alertas;
     }
 
     @PostMapping("/contas")
@@ -87,6 +91,7 @@ public class ContasController {
         detalhes.put("valor", req.getValor());
         detalhes.put("novoSaldo", conta.getSaldo());
         registro.registrar("SAQUE", ts, detalhes);
+        alertas.verificar(conta, "SAQUE");
 
         return ResponseEntity.ok(conta);
     }
