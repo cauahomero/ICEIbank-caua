@@ -1,5 +1,6 @@
 package com.iceibank.agencia.controller;
 
+import com.iceibank.agencia.alerta.AlertasSaldo;
 import com.iceibank.agencia.config.AgenciaState;
 import com.iceibank.agencia.config.AgenciasConfig;
 import com.iceibank.agencia.dto.TransferenciaRequest;
@@ -28,16 +29,18 @@ public class TransferenciasController {
     private final RegistroEventos registro;
     private final PublicadorTransferencias publicador;
     private final TransferenciasRegistro transferencias;
+    private final AlertasSaldo alertas;
     private final boolean simularDuplicidade;
 
     public TransferenciasController(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro,
                                     PublicadorTransferencias publicador, TransferenciasRegistro transferencias,
-                                    @Value("${mensageria.simular-duplicidade}") boolean simularDuplicidade) {
+                                    AlertasSaldo alertas, @Value("${mensageria.simular-duplicidade}") boolean simularDuplicidade) {
         this.estado = estado;
         this.relogio = relogio;
         this.registro = registro;
         this.publicador = publicador;
         this.transferencias = transferencias;
+        this.alertas = alertas;
         this.simularDuplicidade = simularDuplicidade;
     }
 
@@ -74,6 +77,7 @@ public class TransferenciasController {
             detalhesCredito.put("idDestino", req.getIdDestino());
             detalhesCredito.put("valor", req.getValor());
             registro.registrar("TRANSFERENCIA_CREDITO", tsCredito, detalhesCredito);
+            alertas.verificar(contaOrigem, "TRANSFERENCIA");
             return ResponseEntity.ok(Map.of("mensagem", "Transferência concluída (mesma agência)."));
         }
 
@@ -108,6 +112,7 @@ public class TransferenciasController {
         detalhesEnvio.put("tipoMensagem", msg.getTipo());
         detalhesEnvio.put("paraAgencia", agenciaDestino);
         registro.registrar("MENSAGEM_ENVIADA", tsEnvio, detalhesEnvio);
+        alertas.verificar(contaOrigem, "TRANSFERENCIA");
 
         Map<String, Object> resposta = new LinkedHashMap<>();
         resposta.put("mensagem", "Transferência enviada para a agência " + agenciaDestino + ". Aguardando confirmação.");
