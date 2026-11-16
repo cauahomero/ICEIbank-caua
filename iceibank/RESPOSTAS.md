@@ -309,3 +309,12 @@ Alerta de saldo baixo: quando um saque ou uma transferência deixa o saldo de um
 ## Uso de IA
 
 Usei o Claude (Anthropic) para apoiar a implementação do frontend e algumas partes do back, para fazer os scripts e a revisão das respostas. Código funcional revisado e testado.
+
+
+# Sprint 3
+
+## 5.5 Perguntas
+
+1. A regra de "maior ID vence" é só uma convenção. O que o algoritmo precisa é de um critério que todas as agências apliquem do mesmo jeito e que nunca dê empate, e os IDs são únicos e comparáveis. Se a regra fosse invertida (menor ID vence), a eleição mandaria a mensagem para quem tem ID menor e quem venceria seria a agência ativa de menor ID, normalmente a 0. O resultado seria diferente, mas continuaria correto: todas concordariam sobre uma única líder. O nome "Bully" (valentão) vem daí: o mais "forte" (maior ID) sempre toma a liderança, mesmo de uma líder que já estava no cargo.
+2. É esperado. Na subida, as 3 agências começam eleições quase ao mesmo tempo e cada `ELEICAO_RECEBIDA` faz a agência que recebeu começar a própria eleição. No print `eleicao-inicial.png` a agência 2 registrou `TORNOU_LIDER` várias vezes (com os vetores [6,9,8], [9,9,13] e [9,9,17]), uma para cada eleição que ela começou depois de receber `ELEICAO_RECEBIDA` da 0 ou da 1. Por isso a agência 0 recebeu 4 `LIDER_ANUNCIADO` seguidos, todos com `liderId=2`. Também pode acontecer de uma agência menor se declarar líder antes de a maior estar no ar e logo depois ser "derrubada" pelo anúncio da maior. Isso não é bug, porque o algoritmo não promete uma eleição só, promete convergir: o último anúncio sempre vem da agência de maior ID ativa, e no fim as 3 respondem `liderAtual: 2` em `/bully/lider`. O custo é a quantidade de mensagens, que no Bully chega a O(n²) no pior caso.
+3. Para este projeto, que roda em `localhost` numa máquina de laboratório, o risco prático é baixo. Mas o problema é real. Disparar eleições em loop por `/bully/eleicao` é só um incômodo (gera tráfego e logs). O mais grave é o `/bully/coordenador`, também sem autenticação: qualquer um pode mandar `{"liderId": 0}` e fazer uma agência acreditar numa líder falsa, que pode até estar fora do ar. Hoje a líder é só informativa, então nada quebra. No Sprint 4 ela vai coordenar o 2PC, e aí uma líder forjada poderia travar ou manipular transferências. Para resolver, as agências precisariam se autenticar entre si: um segredo compartilhado com HMAC no corpo da mensagem, um JWT de serviço ou TLS mútuo. Outra camada seria deixar as portas `/bully/*` acessíveis só na rede interna das agências.

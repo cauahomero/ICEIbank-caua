@@ -26,6 +26,7 @@ public class JwtFiltro extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return request.getRequestURI().equals("/auth/login")
+                || request.getRequestURI().startsWith("/bully/")
                 || "OPTIONS".equalsIgnoreCase(request.getMethod());
     }
 
