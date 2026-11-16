@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -92,6 +93,25 @@ public class BullyService {
         liderAtual = liderId;
         int[] vetor = relogio.aoReceber(vetorRecebido);
         registro.registrar("LIDER_ANUNCIADO", vetor, Map.of("liderId", liderId, "agencia", idAgencia));
+    }
+
+    // Heartbeat: fixedDelay espera a verificação anterior terminar antes de agendar a próxima
+    @Scheduled(initialDelay = 3000, fixedDelay = 3000)
+    public void verificarLider() {
+        Integer lider = liderAtual;
+        if (lider == null) {
+            iniciarEleicao();
+            return;
+        }
+        if (lider == idAgencia) return;
+
+        try {
+            http.get().uri(urlAgencia(lider) + "/bully/lider").retrieve().toBodilessEntity();
+        } catch (Exception e) {
+            registro.registrar("LIDER_NAO_RESPONDEU", relogio.eventoLocal(), Map.of("liderAtual", lider, "agencia", idAgencia));
+            liderAtual = null;
+            iniciarEleicao();
+        }
     }
 
     public Integer obterLiderAtual() {
