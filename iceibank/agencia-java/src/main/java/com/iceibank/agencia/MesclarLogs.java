@@ -106,7 +106,7 @@ public class MesclarLogs {
     }
 
     // Logs gravados antes da correção usavam a codificação padrão do Windows, não UTF-8
-    private static List<String> lerLinhas(Path arquivo) throws IOException {
+    static List<String> lerLinhas(Path arquivo) throws IOException {
         try {
             return Files.readAllLines(arquivo, StandardCharsets.UTF_8);
         } catch (MalformedInputException e) {
