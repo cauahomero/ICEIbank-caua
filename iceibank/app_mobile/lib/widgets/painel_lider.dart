@@ -13,10 +13,12 @@ String _duracao(Duration d) {
 }
 
 /// Líder atual, situação de cada agência e histórico de trocas de liderança.
+/// Com [recolhivel], mostra só o resumo e abre os detalhes ao tocar (usado na tela de login).
 class PainelLider extends StatelessWidget {
-  const PainelLider({super.key, required this.monitor});
+  const PainelLider({super.key, required this.monitor, this.recolhivel = false});
 
   final MonitorLideranca monitor;
+  final bool recolhivel;
 
   @override
   Widget build(BuildContext context) {
@@ -34,45 +36,75 @@ class PainelLider extends StatelessWidget {
           _ => (Icons.workspace_premium, Colors.green.shade700, 'Agência ${m.lider} é a líder'),
         };
 
+        final cabecalho = Row(
+          children: [
+            Icon(icone, color: cor, size: 32),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Líder atual (Bully)', style: textos.labelMedium),
+                  Text(titulo, style: textos.titleLarge?.copyWith(color: cor)),
+                  if (recolhivel && m.ultimaConsulta != null)
+                    Text(
+                      '${m.agenciasNoAr} de $numeroAgencias agências no ar',
+                      style: textos.bodySmall,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+
+        if (recolhivel) {
+          return Card(
+            key: const Key('painel-lider'),
+            clipBehavior: Clip.antiAlias,
+            child: ExpansionTile(
+              key: const Key('painel-lider-expansivel'),
+              title: cabecalho,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              expandedCrossAxisAlignment: CrossAxisAlignment.start,
+              shape: const Border(),
+              collapsedShape: const Border(),
+              children: _detalhes(context, m),
+            ),
+          );
+        }
+
         return Card(
           key: const Key('painel-lider'),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(icone, color: cor, size: 32),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Líder atual (Bully)', style: textos.labelMedium),
-                      Text(titulo, style: textos.titleLarge?.copyWith(color: cor)),
-                    ]),
-                  ),
-                ]),
-                if (m.ultimaConsulta != null) ...[
-                  const SizedBox(height: 12),
-                  _AgenciasAtivas(monitor: m),
-                  const SizedBox(height: 8),
-                  Text(
-                    m.nenhumaRespondeu
-                        ? 'Última tentativa às ${_hora(m.ultimaConsulta!)}. Tentando de novo a cada ${m.intervalo.inSeconds}s.'
-                        : 'Líder segundo a agência ${m.agenciaConsultada}, consultado às ${_hora(m.ultimaConsulta!)} '
-                            '(atualiza a cada ${m.intervalo.inSeconds}s).',
-                    style: textos.bodySmall,
-                  ),
-                ],
-                if (m.historico.isNotEmpty) ...[
-                  const Divider(height: 24),
-                  _HistoricoLideres(monitor: m),
-                ],
-              ],
+              children: [cabecalho, ..._detalhes(context, m, espacoAntes: true)],
             ),
           ),
         );
       },
     );
+  }
+
+  List<Widget> _detalhes(BuildContext context, MonitorLideranca m, {bool espacoAntes = false}) {
+    final textos = Theme.of(context).textTheme;
+    return [
+      if (m.ultimaConsulta != null) ...[
+        if (espacoAntes) const SizedBox(height: 12),
+        _AgenciasAtivas(monitor: m),
+        const SizedBox(height: 8),
+        Text(
+          m.nenhumaRespondeu
+              ? 'Última tentativa às ${_hora(m.ultimaConsulta!)}. Tentando de novo a cada ${m.intervalo.inSeconds}s.'
+              : 'Líder segundo a agência ${m.agenciaConsultada}, consultado às ${_hora(m.ultimaConsulta!)} '
+                    '(atualiza a cada ${m.intervalo.inSeconds}s).',
+          style: textos.bodySmall,
+        ),
+      ],
+      if (m.historico.isNotEmpty) ...[const Divider(height: 24), _HistoricoLideres(monitor: m)],
+    ];
   }
 }
 
@@ -94,11 +126,15 @@ class _AgenciasAtivas extends StatelessWidget {
       key: const Key('agencias-ativas'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Agências: $noAr de $numeroAgencias no ar',
-            style: textos.titleSmall?.copyWith(color: corResumo, fontWeight: FontWeight.bold)),
+        Text(
+          'Agências: $noAr de $numeroAgencias no ar',
+          style: textos.titleSmall?.copyWith(color: corResumo, fontWeight: FontWeight.bold),
+        ),
         if (m.divergencia)
-          Text('As agências ainda não concordam sobre a líder (eleição convergindo).',
-              style: textos.bodySmall?.copyWith(color: Colors.orange.shade800)),
+          Text(
+            'As agências ainda não concordam sobre a líder (eleição convergindo).',
+            style: textos.bodySmall?.copyWith(color: Colors.orange.shade800),
+          ),
         const SizedBox(height: 4),
         for (var i = 0; i < numeroAgencias; i++) _linha(context, i, verde, erro),
       ],
@@ -126,20 +162,22 @@ class _AgenciasAtivas extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(children: [
-        Icon(Icons.circle, size: 12, color: s.noAr ? verde : erro),
-        const SizedBox(width: 8),
-        Text('Agência $id', style: textos.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-        if (ehLider) ...[
-          const SizedBox(width: 4),
-          Icon(Icons.star, size: 16, color: verde),
+      child: Row(
+        children: [
+          Icon(Icons.circle, size: 12, color: s.noAr ? verde : erro),
+          const SizedBox(width: 8),
+          Text('Agência $id', style: textos.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+          if (ehLider) ...[const SizedBox(width: 4), Icon(Icons.star, size: 16, color: verde)],
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              detalhe,
+              style: textos.bodySmall?.copyWith(color: s.noAr ? null : erro),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(detalhe,
-              style: textos.bodySmall?.copyWith(color: s.noAr ? null : erro), overflow: TextOverflow.ellipsis),
-        ),
-      ]),
+      ),
     );
   }
 }
@@ -159,31 +197,41 @@ class _HistoricoLideres extends StatelessWidget {
       key: const Key('historico-lideres'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          const Icon(Icons.history, size: 18),
-          const SizedBox(width: 6),
-          Text('Histórico de líderes', style: textos.titleSmall),
-          const Spacer(),
-          Text(trocas == 0 ? 'nenhuma troca' : '$trocas ${trocas == 1 ? 'troca' : 'trocas'}', style: textos.bodySmall),
-        ]),
+        Row(
+          children: [
+            const Icon(Icons.history, size: 18),
+            const SizedBox(width: 6),
+            Text('Histórico de líderes', style: textos.titleSmall),
+            const Spacer(),
+            Text(
+              trocas == 0 ? 'nenhuma troca' : '$trocas ${trocas == 1 ? 'troca' : 'trocas'}',
+              style: textos.bodySmall,
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         for (final p in monitor.historico)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SizedBox(
-                width: 84,
-                child: Text('Agência ${p.lider}',
-                    style: textos.bodyMedium?.copyWith(fontWeight: p.fim == null ? FontWeight.bold : null)),
-              ),
-              Expanded(
-                child: Text(
-                  '${p.jaEraLider ? 'já era líder às ' : 'eleita às '}${_hora(p.inicio)}'
-                  '${p.fim == null ? ' · atual' : ' até ${_hora(p.fim!)} (${_duracao(p.duracao(agora))})'}',
-                  style: textos.bodySmall,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 84,
+                  child: Text(
+                    'Agência ${p.lider}',
+                    style: textos.bodyMedium?.copyWith(fontWeight: p.fim == null ? FontWeight.bold : null),
+                  ),
                 ),
-              ),
-            ]),
+                Expanded(
+                  child: Text(
+                    '${p.jaEraLider ? 'já era líder às ' : 'eleita às '}${_hora(p.inicio)}'
+                    '${p.fim == null ? ' · atual' : ' até ${_hora(p.fim!)} (${_duracao(p.duracao(agora))})'}',
+                    style: textos.bodySmall,
+                  ),
+                ),
+              ],
+            ),
           ),
       ],
     );
