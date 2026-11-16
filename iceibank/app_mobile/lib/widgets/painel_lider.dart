@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../lideranca.dart';
 
-String _hora(DateTime t) =>
-    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
-
 String _duracao(Duration d) {
   if (d.inHours > 0) return '${d.inHours}h${(d.inMinutes % 60).toString().padLeft(2, '0')}min';
   if (d.inMinutes > 0) return '${d.inMinutes}min${(d.inSeconds % 60).toString().padLeft(2, '0')}s';
@@ -47,10 +44,7 @@ class PainelLider extends StatelessWidget {
                   Text('Líder atual (Bully)', style: textos.labelMedium),
                   Text(titulo, style: textos.titleLarge?.copyWith(color: cor)),
                   if (recolhivel && m.ultimaConsulta != null)
-                    Text(
-                      '${m.agenciasNoAr} de $numeroAgencias agências no ar',
-                      style: textos.bodySmall,
-                    ),
+                    Text('${m.agenciasNoAr} de $numeroAgencias agências no ar', style: textos.bodySmall),
                 ],
               ),
             ),
@@ -97,8 +91,8 @@ class PainelLider extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           m.nenhumaRespondeu
-              ? 'Última tentativa às ${_hora(m.ultimaConsulta!)}. Tentando de novo a cada ${m.intervalo.inSeconds}s.'
-              : 'Líder segundo a agência ${m.agenciaConsultada}, consultado às ${_hora(m.ultimaConsulta!)} '
+              ? 'Última tentativa às ${hora(m.ultimaConsulta!)}. Tentando de novo a cada ${m.intervalo.inSeconds}s.'
+              : 'Líder segundo a agência ${m.agenciaConsultada}, consultado às ${hora(m.ultimaConsulta!)} '
                     '(atualiza a cada ${m.intervalo.inSeconds}s).',
           style: textos.bodySmall,
         ),
@@ -149,7 +143,7 @@ class _AgenciasAtivas extends StatelessWidget {
 
     final String detalhe;
     if (!s.noAr) {
-      detalhe = 'fora do ar desde ${_hora(s.desde)}';
+      detalhe = 'fora do ar desde ${hora(s.desde)}';
     } else {
       final ms = '${s.latencia!.inMilliseconds} ms';
       final visao = switch (s.liderAtual) {
@@ -225,8 +219,8 @@ class _HistoricoLideres extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    '${p.jaEraLider ? 'já era líder às ' : 'eleita às '}${_hora(p.inicio)}'
-                    '${p.fim == null ? ' · atual' : ' até ${_hora(p.fim!)} (${_duracao(p.duracao(agora))})'}',
+                    '${p.jaEraLider ? 'já era líder às ' : 'eleita às '}${hora(p.inicio)}'
+                    '${p.fim == null ? ' · atual' : ' até ${hora(p.fim!)} (${_duracao(p.duracao(agora))})'}',
                     style: textos.bodySmall,
                   ),
                 ),

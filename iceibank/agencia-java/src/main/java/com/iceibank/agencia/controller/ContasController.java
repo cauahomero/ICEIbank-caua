@@ -129,10 +129,18 @@ public class ContasController {
             detalhes.put("novoSaldo", conta.getSaldo());
             detalhes.put("vetorConhecido", vetorConhecido);
             registro.registrar("SINCRONIZACAO_OFFLINE", ts, detalhes);
-        }
-        if (tipo.equals("SAQUE")) alertas.verificar(conta, "SAQUE");
+            // O alerta de saldo baixo também mexe no relógio, então fica dentro do lock, antes de ler o vetor
+            if (tipo.equals("SAQUE")) alertas.verificar(conta, "SAQUE");
 
-        return ResponseEntity.ok(conta);
+            // Devolve o vetor depois da operação: se o app tiver mais operações pendentes desta conta,
+            // feitas com o mesmo vetor, ele sabe que a única mudança foi a dele e segue com este vetor
+            Map<String, Object> resposta = new LinkedHashMap<>();
+            resposta.put("id", conta.getId());
+            resposta.put("nomeAluno", conta.getNomeAluno());
+            resposta.put("saldo", conta.getSaldo());
+            resposta.put("vetorAtual", relogio.obterVetorAtual());
+            return ResponseEntity.ok(resposta);
+        }
     }
 
     @PostMapping("/contas/{id}/depositar")

@@ -16,14 +16,19 @@ mixin OperacaoMixin<T extends StatefulWidget> on State<T> {
   Resultado? resultado;
   bool carregando = false;
 
-  Future<R?> executar<R>(Future<R> Function() chamada, String Function(R) sucesso) async {
+  /// [tipo] permite marcar um "sucesso" como pendente (ex.: operação guardada na fila offline).
+  Future<R?> executar<R>(
+    Future<R> Function() chamada,
+    String Function(R) sucesso, {
+    TipoMensagem Function(R)? tipo,
+  }) async {
     setState(() {
       carregando = true;
       resultado = null;
     });
     try {
       final dados = await chamada();
-      if (mounted) setState(() => resultado = Resultado(TipoMensagem.ok, sucesso(dados)));
+      if (mounted) setState(() => resultado = Resultado(tipo?.call(dados) ?? TipoMensagem.ok, sucesso(dados)));
       return dados;
     } on ErroApi catch (e) {
       // 401 já derruba a sessão e volta para o login (ver Api)
@@ -54,11 +59,16 @@ class Mensagem extends StatelessWidget {
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: fundo, borderRadius: BorderRadius.circular(8)),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icone, color: texto, size: 20),
-        const SizedBox(width: 8),
-        Expanded(child: Text(r.texto, style: TextStyle(color: texto))),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icone, color: texto, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(r.texto, style: TextStyle(color: texto)),
+          ),
+        ],
+      ),
     );
   }
 }

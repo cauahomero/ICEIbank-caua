@@ -7,10 +7,13 @@ import 'sessao.dart';
 
 /// Erro com o status HTTP junto; status 0 = a agência nem respondeu.
 class ErroApi implements Exception {
-  ErroApi(this.status, this.mensagem);
+  ErroApi(this.status, this.mensagem, {this.dados});
 
   final int status;
   final String mensagem;
+
+  /// Corpo JSON do erro (ex.: o 409 da sincronização traz contaAtual e vetorAtual).
+  final Map<String, dynamic>? dados;
 
   bool get semConexao => status == 0;
 
@@ -26,11 +29,14 @@ class Api {
   final Sessao sessao;
   final http.Client _cliente;
 
-  Future<Map<String, dynamic>> _requisitar(int agencia, String metodo, String caminho,
-      [Map<String, dynamic>? corpo]) async {
+  Future<Map<String, dynamic>> _requisitar(
+    int agencia,
+    String metodo,
+    String caminho, [
+    Map<String, dynamic>? corpo,
+  ]) async {
     final token = sessao.token;
-    final requisicao = http.Request(metodo, urlAgencia(agencia, caminho))
-      ..headers['Content-Type'] = 'application/json';
+    final requisicao = http.Request(metodo, urlAgencia(agencia, caminho))..headers['Content-Type'] = 'application/json';
     if (token != null) requisicao.headers['Authorization'] = 'Bearer $token';
     if (corpo != null) requisicao.body = jsonEncode(corpo);
 
@@ -56,7 +62,7 @@ class Api {
       if (resposta.statusCode == 401 && token != null) {
         await sessao.sair('Sessão encerrada: $mensagem Faça login novamente.');
       }
-      throw ErroApi(resposta.statusCode, mensagem);
+      throw ErroApi(resposta.statusCode, mensagem, dados: dados is Map ? dados.cast<String, dynamic>() : null);
     }
     return (dados as Map?)?.cast<String, dynamic>() ?? {};
   }
@@ -77,12 +83,14 @@ class Api {
   }
 
   // Cada operação vai direto para a agência dona da conta (mesma regra do backend)
-  Future<Map<String, dynamic>> consultarConta(int id) =>
-      _requisitar(agenciaResponsavel(id), 'GET', '/contas/$id');
+  Future<Map<String, dynamic>> consultarConta(int id) => _requisitar(agenciaResponsavel(id), 'GET', '/contas/$id');
 
-  Future<Map<String, dynamic>> criarConta(int id, String nomeAluno, double saldoInicial) =>
-      _requisitar(agenciaResponsavel(id), 'POST', '/contas',
-          {'id': id, 'nomeAluno': nomeAluno, 'saldoInicial': saldoInicial});
+  Future<Map<String, dynamic>> criarConta(int id, String nomeAluno, double saldoInicial) => _requisitar(
+    agenciaResponsavel(id),
+    'POST',
+    '/contas',
+    {'id': id, 'nomeAluno': nomeAluno, 'saldoInicial': saldoInicial},
+  );
 
   Future<Map<String, dynamic>> depositar(int id, double valor) =>
       _requisitar(agenciaResponsavel(id), 'POST', '/contas/$id/depositar', {'valor': valor});
@@ -90,9 +98,20 @@ class Api {
   Future<Map<String, dynamic>> sacar(int id, double valor) =>
       _requisitar(agenciaResponsavel(id), 'POST', '/contas/$id/sacar', {'valor': valor});
 
-  Future<Map<String, dynamic>> transferir(int idOrigem, int idDestino, double valor) =>
-      _requisitar(agenciaResponsavel(idOrigem), 'POST', '/transferencias',
-          {'idOrigem': idOrigem, 'idDestino': idDestino, 'valor': valor});
+  /// Aplica uma operação feita offline (Parte E): 409 se a agência mudou desde [vetorConhecido].
+  Future<Map<String, dynamic>> sincronizar(int id, String tipo, double valor, List<int> vetorConhecido) => _requisitar(
+    agenciaResponsavel(id),
+    'POST',
+    '/contas/$id/sincronizar',
+    {'tipo': tipo, 'valor': valor, 'vetorConhecido': vetorConhecido},
+  );
+
+  Future<Map<String, dynamic>> transferir(int idOrigem, int idDestino, double valor) => _requisitar(
+    agenciaResponsavel(idOrigem),
+    'POST',
+    '/transferencias',
+    {'idOrigem': idOrigem, 'idDestino': idDestino, 'valor': valor},
+  );
 
   Future<Map<String, dynamic>> consultarTransferencia(int agencia, String idTransferencia) =>
       _requisitar(agencia, 'GET', '/transferencias/$idTransferencia');

@@ -14,8 +14,7 @@ String get hostAgencias {
   return 'localhost';
 }
 
-Uri urlAgencia(int idAgencia, String caminho) =>
-    Uri.parse('http://$hostAgencias:${portaBase + idAgencia}$caminho');
+Uri urlAgencia(int idAgencia, String caminho) => Uri.parse('http://$hostAgencias:${portaBase + idAgencia}$caminho');
 
 /// Mesma regra de AgenciasConfig.agenciaResponsavel: o app já sabe para qual agência mandar cada conta.
 int agenciaResponsavel(int idConta) => idConta % numeroAgencias;
@@ -26,3 +25,7 @@ String moeda(num valor) {
   final inteiro = partes[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
   return '${negativo ? '-' : ''}R\$ $inteiro,${partes[1]}';
 }
+
+/// HH:MM:SS (hora local).
+String hora(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';

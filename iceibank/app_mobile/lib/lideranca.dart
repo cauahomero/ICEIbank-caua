@@ -60,7 +60,10 @@ class MonitorLideranca extends ChangeNotifier {
   bool get ativo => _timer != null;
   bool get nenhumaRespondeu => ultimaConsulta != null && agenciasNoAr == 0;
   int get agenciasNoAr => status.values.where((s) => s.noAr).length;
-  Set<int> get foraDoAr => {for (final e in status.entries) if (!e.value.noAr) e.key};
+  Set<int> get foraDoAr => {
+    for (final e in status.entries)
+      if (!e.value.noAr) e.key,
+  };
 
   /// As agências que responderam não concordam sobre quem é a líder (acontece durante uma eleição).
   bool get divergencia =>
@@ -82,9 +85,7 @@ class MonitorLideranca extends ChangeNotifier {
     if (_consultando) return; // a rodada anterior ainda está esperando timeouts
     _consultando = true;
     try {
-      final respostas = await Future.wait([
-        for (var i = 0; i < numeroAgencias; i++) _consultarUma(i),
-      ]);
+      final respostas = await Future.wait([for (var i = 0; i < numeroAgencias; i++) _consultarUma(i)]);
       final agora = DateTime.now();
       for (var i = 0; i < numeroAgencias; i++) {
         final (noAr, liderDela, latencia) = respostas[i];
@@ -99,7 +100,11 @@ class MonitorLideranca extends ChangeNotifier {
       ultimaConsulta = agora;
 
       // A líder mostrada vem da agência preferida; se ela caiu, da primeira que respondeu
-      final ordem = [_preferida, for (var i = 0; i < numeroAgencias; i++) if (i != _preferida) i];
+      final ordem = [
+        _preferida,
+        for (var i = 0; i < numeroAgencias; i++)
+          if (i != _preferida) i,
+      ];
       final escolhida = ordem.where((i) => status[i]!.noAr).firstOrNull;
       agenciaConsultada = escolhida;
       if (escolhida != null) {
