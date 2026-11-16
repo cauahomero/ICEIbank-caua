@@ -28,8 +28,8 @@ flutter run -d chrome
 | `lib/config.dart` | Portas das agências (4006-4008), host por plataforma, regra `id % 3` |
 | `lib/sessao.dart` | Token JWT guardado no aparelho (`shared_preferences`) |
 | `lib/api.dart` | Cliente HTTP: JWT no cabeçalho, erros da API (`ErroApi`), 401 encerra a sessão |
-| `lib/lideranca.dart` | `MonitorLideranca`: consulta `GET /bully/lider` a cada 3 s, pulando agências fora do ar |
-| `lib/widgets/painel_lider.dart` | Painel da líder atual e da última troca de liderança |
+| `lib/lideranca.dart` | `MonitorLideranca`: consulta `GET /bully/lider` nas 3 agências a cada 3 s; guarda quem está no ar e o histórico de líderes |
+| `lib/widgets/painel_lider.dart` | Painel da líder atual, agências ativas (com tempo de resposta) e histórico de líderes |
 | `lib/telas/` | Login e tela principal (saldo, depósito/saque, transferência, criar conta) |
 
 O app manda cada operação direto para a agência dona da conta (`id % 3`), então não há seletor de "agência de entrada" como no frontend web.
