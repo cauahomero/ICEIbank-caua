@@ -81,6 +81,13 @@ foreach ($id in $Agencias) {
     }
 }
 
+# O monitor de alertas roda a partir do mesmo jar e o mantem aberto, entao precisa sair antes de compilar
+if (-not $SemMonitor -and -not $somenteAlgumas) {
+    Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" |
+        Where-Object { $_.CommandLine -like '*MonitorAlertas*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
 # 3. Compila se o jar nao existe, se pediram, ou se algum fonte e mais novo que ele
 $fonteMaisNovo = Get-ChildItem (Join-Path $pastaAgencia 'src'), (Join-Path $pastaAgencia 'pom.xml') -Recurse -File |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -103,9 +110,6 @@ foreach ($id in $Agencias) {
 
 # 5. Monitor de alertas (funcionalidade adicional) - so na subida completa
 if (-not $SemMonitor -and -not $somenteAlgumas) {
-    Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" |
-        Where-Object { $_.CommandLine -like '*MonitorAlertas*' } |
-        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     NovaJanela "Monitor de alertas" $pastaAgencia `
         "java '-Dsun.stdout.encoding=UTF-8' -cp target\agencia-1.0.0.jar '-Dloader.main=com.iceibank.agencia.MonitorAlertas' org.springframework.boot.loader.launch.PropertiesLauncher"
 }
