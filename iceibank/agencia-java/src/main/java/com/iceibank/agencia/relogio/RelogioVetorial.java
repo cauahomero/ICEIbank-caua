@@ -17,6 +17,11 @@ public class RelogioVetorial {
         this.eu = idAgencia;
     }
 
+    /** Só lê o vetor, sem contar como evento (usado para o app guardar o "vetor conhecido"). */
+    public synchronized int[] obterVetorAtual() {
+        return vetor.clone();
+    }
+
     public synchronized int[] eventoLocal() {
         vetor[eu] += 1;
         return vetor.clone();

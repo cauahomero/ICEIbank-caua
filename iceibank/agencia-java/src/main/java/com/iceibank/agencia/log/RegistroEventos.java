@@ -18,17 +18,18 @@ import java.util.Map;
 
 @Component
 public class RegistroEventos {
-    private static final Map<String, String> CAMPO_CONTA = Map.of(
-            "CRIAR_CONTA", "id",
-            "DEPOSITO", "id",
-            "SAQUE", "id",
-            "RENDIMENTO_CDB", "id",
-            "TRANSFERENCIA_DEBITO", "idOrigem",
-            "TRANSFERENCIA_CREDITO", "idDestino",
-            "TRANSFERENCIA_FALHOU", "idOrigem",
-            "TRANSFERENCIA_CONFIRMADA", "idOrigem",
-            "TRANSFERENCIA_ESTORNADA", "idOrigem",
-            "TRANSFERENCIA_CREDITO_REMOTO", "idConta"
+    private static final Map<String, String> CAMPO_CONTA = Map.ofEntries(
+            Map.entry("CRIAR_CONTA", "id"),
+            Map.entry("DEPOSITO", "id"),
+            Map.entry("SAQUE", "id"),
+            Map.entry("SINCRONIZACAO_OFFLINE", "id"),
+            Map.entry("RENDIMENTO_CDB", "id"),
+            Map.entry("TRANSFERENCIA_DEBITO", "idOrigem"),
+            Map.entry("TRANSFERENCIA_CREDITO", "idDestino"),
+            Map.entry("TRANSFERENCIA_FALHOU", "idOrigem"),
+            Map.entry("TRANSFERENCIA_CONFIRMADA", "idOrigem"),
+            Map.entry("TRANSFERENCIA_ESTORNADA", "idOrigem"),
+            Map.entry("TRANSFERENCIA_CREDITO_REMOTO", "idConta")
     );
 
     private final String nomeAgencia;

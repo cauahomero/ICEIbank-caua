@@ -4,7 +4,10 @@ import com.iceibank.agencia.alerta.AlertasSaldo;
 import com.iceibank.agencia.config.AgenciaState;
 import com.iceibank.agencia.config.AgenciasConfig;
 import com.iceibank.agencia.dto.CriarContaRequest;
+import com.iceibank.agencia.dto.SincronizacaoRequest;
+import com.iceibank.agencia.dto.TransferenciaRequest;
 import com.iceibank.agencia.dto.ValorRequest;
+import com.iceibank.agencia.relogio.CompararVetores;
 import com.iceibank.agencia.relogio.RelogioVetorial;
 import com.iceibank.agencia.log.RegistroEventos;
 import com.iceibank.agencia.model.Conta;
@@ -22,13 +25,15 @@ public class ContasController {
     private final RelogioVetorial relogio;
     private final RegistroEventos registro;
     private final AlertasSaldo alertas;
+    private final TransferenciasController transferencias;
 
     public ContasController(AgenciaState estado, RelogioVetorial relogio, RegistroEventos registro,
-                            AlertasSaldo alertas) {
+                            AlertasSaldo alertas, TransferenciasController transferencias) {
         this.estado = estado;
         this.relogio = relogio;
         this.registro = registro;
         this.alertas = alertas;
+        this.transferencias = transferencias;
     }
 
     @PostMapping("/contas")
@@ -57,6 +62,76 @@ public class ContasController {
     public ResponseEntity<?> consultarSaldo(@PathVariable int id) {
         Conta conta = estado.getContas().get(id);
         if (conta == null) return erro(HttpStatus.NOT_FOUND, "Conta não encontrada nesta agência.");
+        // Além da conta, devolve o vetor atual: o app guarda e manda de volta ao sincronizar
+        Map<String, Object> resposta = new LinkedHashMap<>();
+        resposta.put("id", conta.getId());
+        resposta.put("nomeAluno", conta.getNomeAluno());
+        resposta.put("saldo", conta.getSaldo());
+        resposta.put("vetorAtual", relogio.obterVetorAtual());
+        return ResponseEntity.ok(resposta);
+    }
+
+    /**
+     * Aplica uma operação que o app fez offline, desde que nada tenha acontecido na agência
+     * desde a última leitura do app (vetorConhecido igual ao vetor atual). Se o vetor avançou,
+     * devolve 409 com o estado atual em vez de aplicar a operação às cegas.
+     */
+    @PostMapping("/contas/{id}/sincronizar")
+    public ResponseEntity<?> sincronizar(@PathVariable int id, @RequestBody SincronizacaoRequest req) {
+        Conta conta = estado.getContas().get(id);
+        if (conta == null) return erro(HttpStatus.NOT_FOUND, "Conta não encontrada nesta agência.");
+        int[] vetorConhecido = req.getVetorConhecido();
+        if (vetorConhecido == null || vetorConhecido.length != AgenciasConfig.NUMERO_AGENCIAS) {
+            return erro(HttpStatus.BAD_REQUEST, "Informe o vetorConhecido com " + AgenciasConfig.NUMERO_AGENCIAS + " posições.");
+        }
+        if (req.getValor() <= 0) return erro(HttpStatus.BAD_REQUEST, "O valor deve ser maior que zero.");
+        String tipo = req.getTipo() == null ? "" : req.getTipo();
+
+        // Comparar e aplicar sob o lock do relógio: nenhum outro evento entra entre a checagem e a operação
+        synchronized (relogio) {
+            int[] vetorAtual = relogio.obterVetorAtual();
+            CompararVetores.Relacao relacao = CompararVetores.comparar(vetorConhecido, vetorAtual);
+            if (relacao != CompararVetores.Relacao.IGUAIS) {
+                Map<String, Object> conflito = new LinkedHashMap<>();
+                conflito.put("erro", "Conflito detectado: o estado da conta mudou desde a última sincronização do app.");
+                conflito.put("relacao", relacao);
+                conflito.put("vetorConhecido", vetorConhecido);
+                conflito.put("vetorAtual", vetorAtual);
+                conflito.put("contaAtual", conta);
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(conflito);
+            }
+
+            switch (tipo) {
+                case "DEPOSITO" -> conta.creditar(req.getValor());
+                case "SAQUE" -> {
+                    if (conta.getSaldo() < req.getValor()) return erro(HttpStatus.BAD_REQUEST, "Saldo insuficiente.");
+                    conta.debitar(req.getValor());
+                }
+                case "TRANSFERENCIA" -> {
+                    // A checagem do vetor é a mesma; aplicar é a transferência normal (mesma agência ou via fila)
+                    if (req.getIdDestino() == null) return erro(HttpStatus.BAD_REQUEST, "Informe o idDestino da transferência.");
+                    TransferenciaRequest transferencia = new TransferenciaRequest();
+                    transferencia.setIdOrigem(id);
+                    transferencia.setIdDestino(req.getIdDestino());
+                    transferencia.setValor(req.getValor());
+                    return transferencias.transferir(transferencia);
+                }
+                default -> {
+                    return erro(HttpStatus.BAD_REQUEST, "Tipo de operação pendente não suportado: use DEPOSITO, SAQUE ou TRANSFERENCIA.");
+                }
+            }
+
+            int[] ts = relogio.eventoLocal();
+            Map<String, Object> detalhes = new LinkedHashMap<>();
+            detalhes.put("id", id);
+            detalhes.put("tipo", tipo);
+            detalhes.put("valor", req.getValor());
+            detalhes.put("novoSaldo", conta.getSaldo());
+            detalhes.put("vetorConhecido", vetorConhecido);
+            registro.registrar("SINCRONIZACAO_OFFLINE", ts, detalhes);
+        }
+        if (tipo.equals("SAQUE")) alertas.verificar(conta, "SAQUE");
+
         return ResponseEntity.ok(conta);
     }
 
